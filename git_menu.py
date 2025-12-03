@@ -122,11 +122,20 @@ def git_add_prompt():
 
         for key, (status, path) in pairs_for_display:
             if ch == key:
-                try:
-                    subprocess.run(["git", "add", path], check=True)
-                    print(f"Added: {path}")
-                except subprocess.CalledProcessError as exc:
-                    print(f"git add failed: {exc}")
+                # First status column reflects staged state; "?" means untracked.
+                staged = status[0] not in (" ", "?")
+                if staged:
+                    try:
+                        subprocess.run(["git", "restore", "--staged", path], check=True)
+                        print(f"Unstaged: {path}")
+                    except subprocess.CalledProcessError as exc:
+                        print(f"git restore --staged failed: {exc}")
+                else:
+                    try:
+                        subprocess.run(["git", "add", path], check=True)
+                        print(f"Added: {path}")
+                    except subprocess.CalledProcessError as exc:
+                        print(f"git add failed: {exc}")
                 break
         else:
             print("Invalid file selection.")
