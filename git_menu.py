@@ -80,51 +80,56 @@ def choose_directory():
 
 
 def git_add_prompt():
-    try:
-        output = subprocess.check_output(
-            ["git", "status", "--porcelain"], text=True, stderr=subprocess.STDOUT
-        )
-    except subprocess.CalledProcessError as exc:
-        print(f"Could not read git status: {exc.output.strip()}")
-        return
-
-    lines = [line.rstrip("\n") for line in output.splitlines() if line.strip()]
-    if not lines:
-        print("No changes to add.")
-        return
-
-    keys = [chr(c) for c in range(ord("a"), ord("z") + 1)] + list("0123456789")
-    pairs = []
-
-    for line in lines:
-        status = line[:2]
-        path = line[3:] if len(line) > 3 else ""
-        if "->" in path:
-            path = path.split("->", 1)[1].strip()
-        pairs.append((status, path))
-
-    if len(pairs) > len(keys):
-        print(f"Showing first {len(keys)} of {len(pairs)} entries.")
-    pairs_for_display = list(zip(keys, pairs))
-
-    print("\nSelect file to add:")
-    for key, (status, path) in pairs_for_display:
-        print(f"  {key}) {status} {path}")
-
-    sys.stdout.write("Choice: ")
-    sys.stdout.flush()
-    ch = get_key()
-    print(ch)
-
-    for key, (status, path) in pairs_for_display:
-        if ch == key:
-            try:
-                subprocess.run(["git", "add", path], check=True)
-                print(f"Added: {path}")
-            except subprocess.CalledProcessError as exc:
-                print(f"git add failed: {exc}")
+    while True:
+        try:
+            output = subprocess.check_output(
+                ["git", "status", "--porcelain"], text=True, stderr=subprocess.STDOUT
+            )
+        except subprocess.CalledProcessError as exc:
+            print(f"Could not read git status: {exc.output.strip()}")
             return
-    print("Invalid file selection.")
+
+        lines = [line.rstrip("\n") for line in output.splitlines() if line.strip()]
+        if not lines:
+            print("No changes to add.")
+            return
+
+        keys = [chr(c) for c in range(ord("a"), ord("z") + 1)] + list("0123456789")
+        pairs = []
+
+        for line in lines:
+            status = line[:2]
+            path = line[3:] if len(line) > 3 else ""
+            if "->" in path:
+                path = path.split("->", 1)[1].strip()
+            pairs.append((status, path))
+
+        if len(pairs) > len(keys):
+            print(f"Showing first {len(keys)} of {len(pairs)} entries.")
+        pairs_for_display = list(zip(keys, pairs))
+
+        print("\nSelect file to add (q to exit):")
+        for key, (status, path) in pairs_for_display:
+            print(f"  {key}) {status} {path}")
+
+        sys.stdout.write("Choice: ")
+        sys.stdout.flush()
+        ch = get_key()
+        print(ch)
+
+        if ch.lower() == "q":
+            return
+
+        for key, (status, path) in pairs_for_display:
+            if ch == key:
+                try:
+                    subprocess.run(["git", "add", path], check=True)
+                    print(f"Added: {path}")
+                except subprocess.CalledProcessError as exc:
+                    print(f"git add failed: {exc}")
+                break
+        else:
+            print("Invalid file selection.")
 
 
 def main():
