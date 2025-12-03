@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-MENU = "1) git status  2) git pull  3) list files  4) shell  5) up  6) cd  7) git add  q) quit"
+MENU = "1) git status  2) git pull  3) list files  4) shell  5) up  6) cd  7) git add  8) git commit  9) git push  q) quit"
 
 
 def get_key():
@@ -141,6 +141,18 @@ def git_add_prompt():
             print("Invalid file selection.")
 
 
+def git_commit_prompt():
+    message = input("Commit message (leave blank to cancel): ").strip()
+    if not message:
+        print("Commit cancelled.")
+        return
+    print(f"\n$ git commit -m \"{message}\"")
+    try:
+        subprocess.run(["git", "commit", "-m", message], check=True)
+    except subprocess.CalledProcessError as exc:
+        print(f"git commit failed: {exc}")
+
+
 def main():
     print(f"cwd: {os.getcwd()}")
     print(MENU)
@@ -170,6 +182,10 @@ def main():
             choose_directory()
         elif ch == "7":
             git_add_prompt()
+        elif ch == "8":
+            git_commit_prompt()
+        elif ch == "9":
+            run(["git", "push"])
         elif ch.lower() == "q":
             print("Bye.")
             break
