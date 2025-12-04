@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-MENU = "1) git status  2) git pull  3) list files  4) shell  5) up  6) cd  7) git add  8) git commit  9) git push  q) quit"
+MENU = "1) ls  2) up  3) cd  4) shell  5) git status  6) git pull  7) git add  8) git commit  9) git push  q) quit"
 
 
 def get_key():
@@ -162,24 +162,24 @@ def main():
         ch = get_key()
         print(ch)  # echo the key pressed
         if ch == "1":
-            run(["git", "status"])
-        elif ch == "2":
-            run(["git", "pull"])
-        elif ch == "3":
             if sys.platform.startswith("win"):
                 run(["cmd", "/c", "dir"])
             else:
-                run(["ls"])
-        elif ch == "4":
-            launch_shell()
-        elif ch == "5":
+                run(["ls", "--color=auto"])
+        elif ch == "2":
             try:
                 os.chdir("..")
                 print(f"Moved to parent: {os.getcwd()}")
             except OSError as exc:
                 print(f"Could not move to parent: {exc}")
-        elif ch == "6":
+        elif ch == "3":
             choose_directory()
+        elif ch == "4":
+            launch_shell()
+        elif ch == "5":
+            run(["git", "status"])
+        elif ch == "6":
+            run(["git", "pull"])
         elif ch == "7":
             git_add_prompt()
         elif ch == "8":
