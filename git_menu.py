@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 
-MENU = "1) ls  2) up  3) cd  4) shell  5) git status  6) git pull  7) git add  8) git commit  9) git push  q) quit"
+MENU = "1) ls  2) up  3) cd  4) edit  5) shell  6) git status  7) git pull  8) git add  9) git commit  0) git push  q) quit"
 
 
 def get_key():
@@ -141,6 +143,58 @@ def git_add_prompt():
             print("Invalid file selection.")
 
 
+def get_editor_command():
+    env_editor = os.environ.get("GIT_MENU_EDITOR")
+    if env_editor:
+        return shlex.split(env_editor)
+    if sys.platform.startswith("win"):
+        editor = shutil.which("nvim")
+        return [editor] if editor else None
+    return ["nano"]
+
+
+def edit_file_prompt():
+    try:
+        entries = sorted(
+            [name for name in os.listdir(".") if os.path.isfile(name)],
+            key=str.lower,
+        )
+    except OSError as exc:
+        print(f"Could not list files: {exc}")
+        return
+
+    if not entries:
+        print("No files found.")
+        return
+
+    keys = [chr(c) for c in range(ord("a"), ord("z") + 1)] + list("0123456789")
+    if len(entries) > len(keys):
+        print(f"Showing first {len(keys)} of {len(entries)} files.")
+    pairs = list(zip(keys, entries))
+
+    print("\nSelect file to edit (q to exit):")
+    for key, name in pairs:
+        print(f"  {key}) {name}")
+
+    sys.stdout.write("Choice: ")
+    sys.stdout.flush()
+    ch = get_key()
+    print(ch)
+
+    if ch.lower() == "q":
+        return
+
+    for key, name in pairs:
+        if ch == key:
+            editor_cmd = get_editor_command()
+            if not editor_cmd:
+                print("No editor available (set GIT_MENU_EDITOR or install nvim).")
+                return
+            run(editor_cmd + [name])
+            return
+    print("Invalid file selection.")
+
+
 def git_commit_prompt():
     message = input("Commit message (leave blank to cancel): ").strip()
     if not message:
@@ -175,16 +229,18 @@ def main():
         elif ch == "3":
             choose_directory()
         elif ch == "4":
-            launch_shell()
+            edit_file_prompt()
         elif ch == "5":
-            run(["git", "status"])
+            launch_shell()
         elif ch == "6":
-            run(["git", "pull"])
+            run(["git", "status"])
         elif ch == "7":
-            git_add_prompt()
+            run(["git", "pull"])
         elif ch == "8":
-            git_commit_prompt()
+            git_add_prompt()
         elif ch == "9":
+            git_commit_prompt()
+        elif ch == "0":
             run(["git", "push"])
         elif ch.lower() == "q":
             print("Bye.")
