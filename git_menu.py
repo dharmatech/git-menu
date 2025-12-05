@@ -38,7 +38,8 @@ def run(cmd):
 
 def launch_shell():
     if sys.platform.startswith("win"):
-        run(["cmd"])
+        # run(["cmd"])
+        run(["pwsh"])
     else:
         # Use the user's preferred shell if set, otherwise fall back to /bin/sh.
         shell = os.environ.get("SHELL", "/bin/sh")
@@ -217,7 +218,14 @@ def main():
         print(ch)  # echo the key pressed
         if ch == "1":
             if sys.platform.startswith("win"):
-                run(["cmd", "/c", "dir"])
+                # run(["cmd", "/c", "dir"])
+                
+                # powershell -Command "dir"
+                # run(["powershell", "-Command", "dir"])
+                run(["pwsh", "-Command", "dir"])
+
+                # DIR /O:D /T:W
+                # run(["cmd", "/c", "DIR", "/O:D", "/T:W"])
             else:
                 run(["ls", "--color=auto"])
         elif ch == "2":
