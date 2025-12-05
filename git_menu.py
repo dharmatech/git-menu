@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+import csv
 import os
 import shlex
 import shutil
 import subprocess
 import sys
 
-MENU = "1) ls  2) up  3) cd  4) edit  5) shell  6) git status  7) git pull  8) git add  9) git commit  0) git push  q) quit"
+MENU = "1) ls  2) up  3) cd  4) edit  5) shell  a) apps  6) git status  7) git pull  8) git add  9) git commit  0) git push  q) quit"
 
 
 def get_key():
@@ -46,40 +47,315 @@ def launch_shell():
         run([shell])
 
 
-def choose_directory():
-    try:
-        entries = sorted(
-            [name for name in os.listdir(".") if os.path.isdir(name)],
-            key=str.lower,
-        )
-    except OSError as exc:
-        print(f"Could not list directories: {exc}")
+def run_if_available(cmd):
+    """Run a command if its executable exists on PATH."""
+    if shutil.which(cmd[0]) is None:
+        print(f"Command not found: {cmd[0]}")
+        return False
+    run(cmd)
+    return True
+
+
+def launch_terminal_app():
+    cwd = os.getcwd()
+    if sys.platform.startswith("win"):
+        # Windows Terminal
+        if not run_if_available(["wt", "-d", cwd]):
+            print("Windows Terminal (wt) not found.")
         return
 
-    if not entries:
-        print("No directories found.")
-        return
+    candidates = [
+        ["gnome-terminal", f"--working-directory={cwd}"],
+        ["konsole", "--workdir", cwd],
+        ["xfce4-terminal", "--working-directory", cwd],
+        ["mate-terminal", f"--working-directory={cwd}"],
+        ["lxterminal", "--working-directory", cwd],
+        ["x-terminal-emulator", "--working-directory", cwd],
+        ["alacritty", "--working-directory", cwd],
+        ["kitty", "--directory", cwd],
+        ["wezterm", "start", "--cwd", cwd],
+    ]
 
-    # Build a keymap: a, b, c, ..., 0-9 after letters if needed.
-    keys = [chr(c) for c in range(ord("a"), ord("z") + 1)] + list("0123456789")
-    pairs = list(zip(keys, entries))
-    print("\nSelect directory:")
-    for key, name in pairs:
-        print(f"  {key}) {name}")
+    for cmd in candidates:
+        if run_if_available(cmd):
+            return
+
+    print("No supported terminal launcher found.")
+
+
+def apps_menu():
+    top_cmd = ["wsl", "top"] if sys.platform.startswith("win") else ["top"]
+    htop_cmd = ["wsl", "htop"] if sys.platform.startswith("win") else ["htop"]
+
+    options = [
+        ("1", "top", lambda: run_if_available(top_cmd)),
+        ("2", "htop", lambda: run_if_available(htop_cmd)),
+        ("3", "terminal", launch_terminal_app),
+        ("4", "processes", processes_menu),
+    ]
+
+    print("\nApps:")
+    for key, label, _ in options:
+        print(f"  {key}) {label}")
+    print("  q) back")
 
     sys.stdout.write("Choice: ")
     sys.stdout.flush()
     ch = get_key()
     print(ch)
-    for key, name in pairs:
+
+    if ch.lower() == "q":
+        return
+
+    for key, _, action in options:
         if ch == key:
-            try:
-                os.chdir(name)
-                print(f"Changed directory to: {os.getcwd()}")
-            except OSError as exc:
-                print(f"Could not change directory: {exc}")
+            action()
             return
-    print("Invalid directory selection.")
+    print("Invalid app selection.")
+
+
+def fetch_processes(filter_text=""):
+    procs = []
+    try:
+        if sys.platform.startswith("win"):
+            try:
+                output = subprocess.check_output(
+                    ["tasklist", "/fo", "csv", "/nh"],
+                    text=True,
+                    stderr=subprocess.STDOUT,
+                )
+            except subprocess.CalledProcessError as exc:
+                print(f"Could not list processes: {exc.output.strip()}")
+                return []
+            reader = csv.reader(output.splitlines())
+            for row in reader:
+                if len(row) < 2:
+                    continue
+                name, pid = row[0], row[1]
+                try:
+                    pid_int = int(pid)
+                except ValueError:
+                    continue
+                procs.append((pid_int, name))
+        else:
+            try:
+                output = subprocess.check_output(
+                    ["ps", "-eo", "pid,comm"], text=True, stderr=subprocess.STDOUT
+                )
+            except subprocess.CalledProcessError as exc:
+                print(f"Could not list processes: {exc.output.strip()}")
+                return []
+            lines = output.splitlines()
+            if lines and lines[0].strip().lower().startswith("pid"):
+                lines = lines[1:]
+            for line in lines:
+                parts = line.strip().split(None, 1)
+                if len(parts) != 2:
+                    continue
+                pid_str, cmd = parts
+                try:
+                    pid_int = int(pid_str)
+                except ValueError:
+                    continue
+                procs.append((pid_int, cmd))
+    except OSError as exc:
+        print(f"Could not list processes: {exc}")
+        return []
+
+    if filter_text:
+        ft = filter_text.lower()
+        procs = [(pid, name) for pid, name in procs if ft in name.lower()]
+
+    procs.sort(key=lambda p: p[0])
+    return procs
+
+
+def stop_process(pid):
+    if sys.platform.startswith("win"):
+        cmd = ["taskkill", "/PID", str(pid)]
+    else:
+        cmd = ["kill", str(pid)]
+    run(cmd)
+
+
+def process_browser(title, allow_kill):
+    page_size = 15
+    page = 0
+    filter_text = ""
+
+    while True:
+        procs = fetch_processes(filter_text)
+        if not procs:
+            if filter_text:
+                print(f"No processes match '{filter_text}'.")
+            else:
+                print("No processes found.")
+            return
+
+        total = len(procs)
+        max_page = max(0, (total - 1) // page_size)
+        page = max(0, min(page, max_page))
+        start = page * page_size
+        chunk = procs[start : start + page_size]
+        keys = [chr(ord("a") + i) for i in range(len(chunk))]
+
+        print(
+            f"\n{title} (showing {start + 1}-{start + len(chunk)} of {total})"
+        )
+        if filter_text:
+            print(f"Filter: {filter_text}")
+        for key, (pid, name) in zip(keys, chunk):
+            print(f"  {key}) {name} (pid {pid})")
+
+        print("n) next page  p) prev page  s) search  r) refresh  q) back")
+        if allow_kill:
+            print("Select a process key to stop it.")
+
+        sys.stdout.write("Choice: ")
+        sys.stdout.flush()
+        ch = get_key()
+        print(ch)
+        cl = ch.lower()
+
+        if cl == "q":
+            return
+        if cl == "n":
+            if page < max_page:
+                page += 1
+            else:
+                print("Already at last page.")
+            continue
+        if cl == "p":
+            if page > 0:
+                page -= 1
+            else:
+                print("Already at first page.")
+            continue
+        if cl == "s":
+            filter_text = input("Filter text (blank to clear): ").strip()
+            page = 0
+            continue
+        if cl == "r":
+            continue
+
+        if allow_kill:
+            for key, (pid, _) in zip(keys, chunk):
+                if ch == key:
+                    stop_process(pid)
+                    break
+            else:
+                print("Invalid selection.")
+        else:
+            if ch in keys:
+                print("Use 'stop process' to terminate a process.")
+            else:
+                print("Invalid selection.")
+
+
+def processes_menu():
+    options = [
+        ("1", "list processes", lambda: process_browser("Processes", False)),
+        ("2", "stop process", lambda: process_browser("Stop process", True)),
+    ]
+
+    print("\nProcesses:")
+    for key, label, _ in options:
+        print(f"  {key}) {label}")
+    print("  q) back")
+
+    sys.stdout.write("Choice: ")
+    sys.stdout.flush()
+    ch = get_key()
+    print(ch)
+
+    if ch.lower() == "q":
+        return
+
+    for key, _, action in options:
+        if ch == key:
+            action()
+            return
+    print("Invalid processes selection.")
+
+
+def choose_directory():
+    page_size = 15
+    page = 0
+    filter_text = ""
+
+    while True:
+        try:
+            entries = sorted(
+                [name for name in os.listdir(".") if os.path.isdir(name)],
+                key=str.lower,
+            )
+        except OSError as exc:
+            print(f"Could not list directories: {exc}")
+            return
+
+        if filter_text:
+            ft = filter_text.lower()
+            entries = [name for name in entries if ft in name.lower()]
+
+        if not entries:
+            if filter_text:
+                print(f"No directories match '{filter_text}'.")
+            else:
+                print("No directories found.")
+            return
+
+        total = len(entries)
+        max_page = max(0, (total - 1) // page_size)
+        page = max(0, min(page, max_page))
+        start = page * page_size
+        chunk = entries[start : start + page_size]
+        keys = [chr(ord("a") + i) for i in range(len(chunk))]
+
+        print(
+            f"\nSelect directory (showing {start + 1}-{start + len(chunk)} of {total})"
+        )
+        if filter_text:
+            print(f"Filter: {filter_text}")
+        for key, name in zip(keys, chunk):
+            print(f"  {key}) {name}")
+
+        print("n) next page  p) prev page  s) search  r) refresh  q) back")
+        sys.stdout.write("Choice: ")
+        sys.stdout.flush()
+        ch = get_key()
+        print(ch)
+        cl = ch.lower()
+
+        if cl == "q":
+            return
+        if cl == "n":
+            if page < max_page:
+                page += 1
+            else:
+                print("Already at last page.")
+            continue
+        if cl == "p":
+            if page > 0:
+                page -= 1
+            else:
+                print("Already at first page.")
+            continue
+        if cl == "s":
+            filter_text = input("Filter text (blank to clear): ").strip()
+            page = 0
+            continue
+        if cl == "r":
+            continue
+
+        for key, name in zip(keys, chunk):
+            if ch == key:
+                try:
+                    os.chdir(name)
+                    print(f"Changed directory to: {os.getcwd()}")
+                except OSError as exc:
+                    print(f"Could not change directory: {exc}")
+                return
+        print("Invalid directory selection.")
 
 
 def git_add_prompt():
@@ -240,6 +516,8 @@ def main():
             edit_file_prompt()
         elif ch == "5":
             launch_shell()
+        elif ch.lower() == "a":
+            apps_menu()
         elif ch == "6":
             run(["git", "status"])
         elif ch == "7":
