@@ -8,3 +8,5 @@ The code is very messy.
 Fork and customize to your liking. 
 Let me know what you come up with.
 
+Video demo on termux:
+https://www.youtube.com/watch?v=UXVBzW_MdUQ
