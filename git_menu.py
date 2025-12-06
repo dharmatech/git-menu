@@ -616,6 +616,7 @@ def git_add_prompt():
 
 
 def git_branch_prompt():
+    current_branch = current_git_branch()
     try:
         output = subprocess.check_output(
             [
@@ -660,6 +661,10 @@ def git_branch_prompt():
     for key, (name, date_display, is_current) in pairs:
         marker = "* " if is_current else "  "
         print(f"  {key}) {marker}{name} [{date_display}]")
+    if current_branch and not current_branch.startswith("HEAD"):
+        print(f"  m) merge into {current_branch}")
+    else:
+        print("  m) merge into current (unavailable in detached HEAD)")
     print("  n) create new branch")
     print("Select a branch to switch to, or q to exit.")
 
@@ -669,6 +674,34 @@ def git_branch_prompt():
     print(ch)
 
     if ch.lower() == "q":
+        return
+
+    if ch.lower() == "m":
+        if not current_branch or current_branch.startswith("HEAD"):
+            print("Cannot merge: not on a named branch (detached HEAD).")
+            return
+        merge_pairs = [(key, data) for key, data in pairs if not data[2]]
+        if not merge_pairs:
+            print("No other branches to merge.")
+            return
+        print(f"\nMerge into {current_branch}. Select branch (q to cancel):")
+        for key, (name, date_display, _) in merge_pairs:
+            print(f"  {key}) {name} [{date_display}]")
+        sys.stdout.write("Choice: ")
+        sys.stdout.flush()
+        mch = get_key()
+        print(mch)
+        if mch.lower() == "q":
+            return
+        for key, (name, _, _) in merge_pairs:
+            if mch == key:
+                print(f"\n$ git merge {name}")
+                try:
+                    subprocess.run(["git", "merge", name], check=True)
+                except subprocess.CalledProcessError as exc:
+                    print(f"git merge failed: {exc}")
+                return
+        print("Invalid branch selection.")
         return
 
     if ch.lower() == "n":
