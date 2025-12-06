@@ -5,6 +5,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 
 BASE_MENU_ITEMS = ["1) ls", "2) up", "3) cd", "4) edit", "5) shell", "a) apps"]
 GIT_MENU_ITEMS = [
@@ -111,6 +112,63 @@ def launch_terminal_app():
     print("No supported terminal launcher found.")
 
 
+def show_recent_files():
+    try:
+        entries = []
+        with os.scandir(".") as it:
+            for entry in it:
+                try:
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                    is_file = entry.is_file(follow_symlinks=False)
+                    if not (is_dir or is_file):
+                        continue
+                    stat = entry.stat(follow_symlinks=False)
+                except OSError as exc:
+                    print(f"Could not read file info for {entry.name}: {exc}")
+                    continue
+                label = f"{entry.name}/" if is_dir else entry.name
+                entries.append((stat.st_mtime, label))
+    except OSError as exc:
+        print(f"Could not list files: {exc}")
+        return
+
+    if not entries:
+        print("No files found.")
+        return
+
+    entries.sort(key=lambda item: item[0])
+
+    print("\nRecent files and directories (oldest first; newest at bottom):")
+    for mtime, name in entries:
+        timestamp = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+        print(f"  {timestamp}  {name}")
+
+
+def files_menu():
+    options = [
+        ("1", "recent", show_recent_files),
+    ]
+
+    print("\nFiles:")
+    for key, label, _ in options:
+        print(f"  {key}) {label}")
+    print("  q) back")
+
+    sys.stdout.write("Choice: ")
+    sys.stdout.flush()
+    ch = get_key()
+    print(ch)
+
+    if ch.lower() == "q":
+        return
+
+    for key, _, action in options:
+        if ch == key:
+            action()
+            return
+    print("Invalid files selection.")
+
+
 def apps_menu():
     top_cmd = ["wsl", "top"] if sys.platform.startswith("win") else ["top"]
     htop_cmd = ["wsl", "htop"] if sys.platform.startswith("win") else ["htop"]
@@ -120,6 +178,7 @@ def apps_menu():
         ("2", "htop", lambda: run_if_available(htop_cmd)),
         ("3", "terminal", launch_terminal_app),
         ("4", "processes", processes_menu),
+        ("5", "files", files_menu),
     ]
 
     print("\nApps:")
