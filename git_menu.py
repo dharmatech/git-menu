@@ -440,6 +440,7 @@ def choose_directory():
     page_size = 15
     page = 0
     filter_text = ""
+    home_path = os.path.expanduser("~")
 
     while True:
         try:
@@ -455,12 +456,17 @@ def choose_directory():
             ft = filter_text.lower()
             entries = [name for name in entries if ft in name.lower()]
 
-        if not entries:
+        home_available = bool(home_path) and os.path.isdir(home_path)
+
+        if not entries and not home_available:
             if filter_text:
                 print(f"No directories match '{filter_text}'.")
             else:
                 print("No directories found.")
             return
+
+        if not entries:
+            print("No directories found in current location.")
 
         total = len(entries)
         max_page = max(0, (total - 1) // page_size)
@@ -469,11 +475,16 @@ def choose_directory():
         chunk = entries[start : start + page_size]
         keys = [chr(ord("a") + i) for i in range(len(chunk))]
 
-        print(
-            f"\nSelect directory (showing {start + 1}-{start + len(chunk)} of {total})"
-        )
+        if total:
+            print(
+                f"\nSelect directory (showing {start + 1}-{start + len(chunk)} of {total})"
+            )
+        else:
+            print("\nSelect directory")
         if filter_text:
             print(f"Filter: {filter_text}")
+        if home_available:
+            print(f"  0) home ({home_path})")
         for key, name in zip(keys, chunk):
             print(f"  {key}) {name}")
 
@@ -483,6 +494,17 @@ def choose_directory():
         ch = get_key()
         print(ch)
         cl = ch.lower()
+
+        if ch == "0":
+            if not home_available:
+                print("Home directory not available.")
+                continue
+            try:
+                os.chdir(home_path)
+                print(f"Changed directory to: {os.getcwd()}")
+            except OSError as exc:
+                print(f"Could not change to home directory: {exc}")
+            return
 
         if cl == "q":
             return
