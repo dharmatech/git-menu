@@ -144,9 +144,56 @@ def show_recent_files():
         print(f"  {timestamp}  {name}")
 
 
+def format_size(num_bytes):
+    units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
+    size = float(num_bytes)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} {unit}"
+            return f"{size:.2f} {unit}"
+        size /= 1024
+
+
+def directory_size_bytes(path):
+    total = 0
+    stack = [path]
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    try:
+                        if entry.is_symlink():
+                            # Avoid following symlinks to prevent cycles.
+                            continue
+                        if entry.is_file(follow_symlinks=False):
+                            try:
+                                total += entry.stat(follow_symlinks=False).st_size
+                            except OSError as exc:
+                                print(f"Could not get size for {entry.path}: {exc}")
+                        elif entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                    except OSError as exc:
+                        print(f"Could not access {entry.path}: {exc}")
+        except OSError as exc:
+            print(f"Could not read directory {current}: {exc}")
+    return total
+
+
+def show_disk_usage():
+    cwd = os.getcwd()
+    print(f"\nCalculating disk usage for: {cwd}")
+    total_bytes = directory_size_bytes(cwd)
+    print(
+        f"Total size: {format_size(total_bytes)} ({total_bytes:,} bytes)"
+    )
+
+
 def files_menu():
     options = [
         ("1", "recent", show_recent_files),
+        ("2", "disk usage", show_disk_usage),
     ]
 
     print("\nFiles:")
