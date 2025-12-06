@@ -441,6 +441,7 @@ def choose_directory():
     page = 0
     filter_text = ""
     home_path = os.path.expanduser("~")
+    root_path = os.path.abspath(os.sep)
 
     while True:
         try:
@@ -457,8 +458,9 @@ def choose_directory():
             entries = [name for name in entries if ft in name.lower()]
 
         home_available = bool(home_path) and os.path.isdir(home_path)
+        root_available = bool(root_path) and os.path.isdir(root_path)
 
-        if not entries and not home_available:
+        if not entries and not home_available and not root_available:
             if filter_text:
                 print(f"No directories match '{filter_text}'.")
             else:
@@ -485,6 +487,8 @@ def choose_directory():
             print(f"Filter: {filter_text}")
         if home_available:
             print(f"  0) home ({home_path})")
+        if root_available:
+            print(f"  1) root ({root_path})")
         for key, name in zip(keys, chunk):
             print(f"  {key}) {name}")
 
@@ -504,6 +508,16 @@ def choose_directory():
                 print(f"Changed directory to: {os.getcwd()}")
             except OSError as exc:
                 print(f"Could not change to home directory: {exc}")
+            return
+        if ch == "1":
+            if not root_available:
+                print("Root directory not available.")
+                continue
+            try:
+                os.chdir(root_path)
+                print(f"Changed directory to: {os.getcwd()}")
+            except OSError as exc:
+                print(f"Could not change to root directory: {exc}")
             return
 
         if cl == "q":
