@@ -660,6 +660,7 @@ def git_branch_prompt():
     for key, (name, date_display, is_current) in pairs:
         marker = "* " if is_current else "  "
         print(f"  {key}) {marker}{name} [{date_display}]")
+    print("  n) create new branch")
     print("Select a branch to switch to, or q to exit.")
 
     sys.stdout.write("Choice: ")
@@ -668,6 +669,27 @@ def git_branch_prompt():
     print(ch)
 
     if ch.lower() == "q":
+        return
+
+    if ch.lower() == "n":
+        new_name = input("New branch name (blank to cancel): ").strip()
+        if not new_name:
+            print("Branch creation cancelled.")
+            return
+        # Avoid clobbering an existing ref.
+        exists = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", new_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        if exists:
+            print(f"Branch already exists: {new_name}")
+            return
+        print(f"\n$ git switch -c {new_name}")
+        try:
+            subprocess.run(["git", "switch", "-c", new_name], check=True)
+        except subprocess.CalledProcessError as exc:
+            print(f"git switch -c failed: {exc}")
         return
 
     for key, (name, _, is_current) in pairs:
