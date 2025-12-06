@@ -6,7 +6,14 @@ import shutil
 import subprocess
 import sys
 
-MENU = "1) ls  2) up  3) cd  4) edit  5) shell  a) apps  6) git status  7) git pull  8) git add  9) git commit  0) git push  q) quit"
+BASE_MENU_ITEMS = ["1) ls", "2) up", "3) cd", "4) edit", "5) shell", "a) apps"]
+GIT_MENU_ITEMS = [
+    "6) git status",
+    "7) git pull",
+    "8) git add",
+    "9) git commit",
+    "0) git push",
+]
 
 
 def get_key():
@@ -35,6 +42,27 @@ def get_key():
 def run(cmd):
     print(f"\n$ {' '.join(cmd)}")
     subprocess.run(cmd, check=False)
+
+
+def format_menu(git_available):
+    parts = list(BASE_MENU_ITEMS)
+    if git_available:
+        parts.extend(GIT_MENU_ITEMS)
+    parts.append("q) quit")
+    return "  ".join(parts)
+
+
+def in_git_repo():
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return False
 
 
 def launch_shell():
@@ -485,13 +513,17 @@ def git_commit_prompt():
 
 
 def main():
-    print(f"cwd: {os.getcwd()}")
-    print(MENU)
     while True:
+        git_available = in_git_repo()
+        print(f"\ncwd: {os.getcwd()}")
+        print(format_menu(git_available))
         sys.stdout.write("\nSelect: ")
         sys.stdout.flush()
         ch = get_key()
         print(ch)  # echo the key pressed
+        if not git_available and ch in ("6", "7", "8", "9", "0"):
+            print("Git commands unavailable (not a git repository).")
+            continue
         if ch == "1":
             if sys.platform.startswith("win"):
                 # run(["cmd", "/c", "dir"])
@@ -533,8 +565,6 @@ def main():
             break
         else:
             print("Invalid choice.")
-        print(f"\ncwd: {os.getcwd()}")
-        print(MENU)
 
 
 if __name__ == "__main__":
