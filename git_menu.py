@@ -14,6 +14,7 @@ GIT_MENU_ITEMS = [
     "8) git add",
     "9) git commit",
     "0) git push",
+    "b) git branch",
 ]
 
 
@@ -614,6 +615,75 @@ def git_add_prompt():
             print("Invalid file selection.")
 
 
+def git_branch_prompt():
+    try:
+        output = subprocess.check_output(
+            [
+                "git",
+                "for-each-ref",
+                "--sort=committerdate",
+                "--format=%(refname:short)%00%(committerdate:iso8601)%00%(HEAD)",
+                "refs/heads",
+            ],
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"Could not list branches: {exc.output.strip()}")
+        return
+
+    lines = [line for line in output.splitlines() if line.strip()]
+    if not lines:
+        print("No branches found.")
+        return
+
+    branches = []
+    for line in lines:
+        parts = line.split("\0")
+        if len(parts) != 3:
+            continue
+        name, date_str, head_flag = parts
+        date_display = date_str[:10] if date_str else ""
+        is_current = head_flag.strip() == "*"
+        branches.append((name, date_display, is_current))
+
+    if not branches:
+        print("No branches found.")
+        return
+
+    keys = [chr(c) for c in range(ord("a"), ord("z") + 1)] + list("0123456789")
+    if len(branches) > len(keys):
+        print(f"Showing first {len(keys)} of {len(branches)} branches.")
+    pairs = list(zip(keys, branches))
+
+    print("\nGit branches (oldest first):")
+    for key, (name, date_display, is_current) in pairs:
+        marker = "* " if is_current else "  "
+        print(f"  {key}) {marker}{name} [{date_display}]")
+    print("Select a branch to switch to, or q to exit.")
+
+    sys.stdout.write("Choice: ")
+    sys.stdout.flush()
+    ch = get_key()
+    print(ch)
+
+    if ch.lower() == "q":
+        return
+
+    for key, (name, _, is_current) in pairs:
+        if ch == key:
+            if is_current:
+                print(f"Already on branch: {name}")
+                return
+            print(f"\n$ git switch {name}")
+            try:
+                subprocess.run(["git", "switch", name], check=True)
+            except subprocess.CalledProcessError as exc:
+                print(f"git switch failed: {exc}")
+            return
+    print("Invalid branch selection.")
+
+
 def get_editor_command():
     env_editor = os.environ.get("GIT_MENU_EDITOR")
     if env_editor:
@@ -690,7 +760,7 @@ def main():
         sys.stdout.flush()
         ch = get_key()
         print(ch)  # echo the key pressed
-        if not git_available and ch in ("6", "7", "8", "9", "0"):
+        if not git_available and ch.lower() in ("6", "7", "8", "9", "0", "b"):
             print("Git commands unavailable (not a git repository).")
             continue
         if ch == "1":
@@ -729,6 +799,8 @@ def main():
             git_commit_prompt()
         elif ch == "0":
             run(["git", "push"])
+        elif ch.lower() == "b":
+            git_branch_prompt()
         elif ch.lower() == "q":
             print("Bye.")
             break
