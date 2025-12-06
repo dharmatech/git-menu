@@ -207,13 +207,48 @@ def directory_size_bytes(path):
     return total
 
 
+def directory_item_sizes(path):
+    items = []
+    try:
+        with os.scandir(path) as it:
+            for entry in it:
+                try:
+                    if entry.is_symlink():
+                        continue
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                    is_file = entry.is_file(follow_symlinks=False)
+                    if not (is_dir or is_file):
+                        continue
+                    if is_file:
+                        try:
+                            size = entry.stat(follow_symlinks=False).st_size
+                        except OSError as exc:
+                            print(f"Could not get size for {entry.name}: {exc}")
+                            continue
+                    else:
+                        size = directory_size_bytes(entry.path)
+                    label = f"{entry.name}/" if is_dir else entry.name
+                    items.append((label, size))
+                except OSError as exc:
+                    print(f"Could not read file info for {entry.name}: {exc}")
+    except OSError as exc:
+        print(f"Could not list files: {exc}")
+    return items
+
+
 def show_disk_usage():
     cwd = os.getcwd()
     print(f"\nCalculating disk usage for: {cwd}")
-    total_bytes = directory_size_bytes(cwd)
-    print(
-        f"Total size: {format_size(total_bytes)} ({total_bytes:,} bytes)"
-    )
+    items = directory_item_sizes(cwd)
+    if items:
+        items.sort(key=lambda item: item[1])
+        print("\nItems by size (ascending):")
+        for name, size in items:
+            print(f"  {name}: {format_size(size)} ({size:,} bytes)")
+    else:
+        print("\nNo files or directories found.")
+    total_bytes = sum(size for _, size in items)
+    print(f"\nTotal size: {format_size(total_bytes)} ({total_bytes:,} bytes)")
 
 
 def files_menu():
