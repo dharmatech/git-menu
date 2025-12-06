@@ -66,6 +66,30 @@ def in_git_repo():
         return False
 
 
+def current_git_branch():
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            text=True,
+            stderr=subprocess.STDOUT,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return None
+
+    if branch == "HEAD":
+        try:
+            desc = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                text=True,
+                stderr=subprocess.STDOUT,
+            ).strip()
+            return f"HEAD {desc}" if desc else "HEAD"
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+            return "HEAD"
+
+    return branch or None
+
+
 def launch_shell():
     if sys.platform.startswith("win"):
         # run(["cmd"])
@@ -621,7 +645,10 @@ def git_commit_prompt():
 def main():
     while True:
         git_available = in_git_repo()
+        branch = current_git_branch() if git_available else None
         print(f"\ncwd: {os.getcwd()}")
+        if branch:
+            print(f"git: {branch}")
         print(format_menu(git_available))
         sys.stdout.write("\nSelect: ")
         sys.stdout.flush()
