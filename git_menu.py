@@ -16,6 +16,7 @@ GIT_MENU_ITEMS = [
     "0) git push",
     "b) git branch",
 ]
+cd_history = []
 
 
 def get_key():
@@ -437,6 +438,106 @@ def processes_menu():
     print("Invalid processes selection.")
 
 
+def add_cd_history_entry(path):
+    abs_path = os.path.abspath(path)
+    if os.path.isdir(abs_path):
+        cd_history.append(abs_path)
+
+
+def change_directory(path, success_prefix="Changed directory to"):
+    try:
+        os.chdir(path)
+    except OSError as exc:
+        print(f"Could not change directory: {exc}")
+        return False
+    new_path = os.getcwd()
+    add_cd_history_entry(new_path)
+    print(f"{success_prefix}: {new_path}")
+    return True
+
+
+def directory_choice_keys(count):
+    """Generate menu keys for directory listings, avoiding reserved hotkeys like 'h'."""
+    forbidden = {"h"}
+    keys = []
+    letter_code = ord("a")
+    digit_code = ord("0")
+    while len(keys) < count:
+        if letter_code <= ord("z"):
+            ch = chr(letter_code)
+            letter_code += 1
+        else:
+            ch = chr(digit_code)
+            digit_code += 1
+            if digit_code > ord("9"):
+                break
+        if ch in forbidden:
+            continue
+        keys.append(ch)
+    return keys
+
+
+def cd_history_menu():
+    if not cd_history:
+        print("No cd history yet.")
+        return False
+
+    page_size = 15
+    page = 0
+
+    while True:
+        ordered = list(reversed(cd_history))
+        total = len(ordered)
+        max_page = max(0, (total - 1) // page_size)
+        page = max(0, min(page, max_page))
+        start = page * page_size
+        chunk = ordered[start : start + page_size]
+        keys = [chr(ord("a") + i) for i in range(len(chunk))]
+
+        print(
+            f"\nCD history (newest first) "
+            f"(showing {start + 1}-{start + len(chunk)} of {total})"
+        )
+        for key, path in zip(keys, chunk):
+            print(f"  {key}) {path}")
+
+        print("n) next page  p) prev page  q) back")
+        sys.stdout.write("Choice: ")
+        sys.stdout.flush()
+        ch = get_key()
+        print(ch)
+        cl = ch.lower()
+
+        if cl == "q":
+            return False
+        if cl == "n":
+            if page < max_page:
+                page += 1
+            else:
+                print("Already at last page.")
+            continue
+        if cl == "p":
+            if page > 0:
+                page -= 1
+            else:
+                print("Already at first page.")
+            continue
+
+        selected = None
+        for key, path in zip(keys, chunk):
+            if ch == key:
+                selected = path
+                break
+        if selected is None:
+            print("Invalid selection.")
+            continue
+        if not os.path.isdir(selected):
+            print(f"Directory no longer exists: {selected}")
+            continue
+        if change_directory(selected):
+            return True
+
+
 def choose_directory():
     page_size = 15
     page = 0
@@ -476,7 +577,7 @@ def choose_directory():
         page = max(0, min(page, max_page))
         start = page * page_size
         chunk = entries[start : start + page_size]
-        keys = [chr(ord("a") + i) for i in range(len(chunk))]
+        keys = directory_choice_keys(len(chunk))
 
         if total:
             print(
@@ -493,7 +594,7 @@ def choose_directory():
         for key, name in zip(keys, chunk):
             print(f"  {key}) {name}")
 
-        print("n) next page  p) prev page  s) search  r) refresh  q) back")
+        print("n) next page  p) prev page  s) search  h) history  r) refresh  q) back")
         sys.stdout.write("Choice: ")
         sys.stdout.flush()
         ch = get_key()
@@ -504,22 +605,16 @@ def choose_directory():
             if not home_available:
                 print("Home directory not available.")
                 continue
-            try:
-                os.chdir(home_path)
-                print(f"Changed directory to: {os.getcwd()}")
-            except OSError as exc:
-                print(f"Could not change to home directory: {exc}")
-            return
+            if change_directory(home_path):
+                return
+            continue
         if ch == "1":
             if not root_available:
                 print("Root directory not available.")
                 continue
-            try:
-                os.chdir(root_path)
-                print(f"Changed directory to: {os.getcwd()}")
-            except OSError as exc:
-                print(f"Could not change to root directory: {exc}")
-            return
+            if change_directory(root_path):
+                return
+            continue
 
         if cl == "q":
             return
@@ -535,6 +630,11 @@ def choose_directory():
             else:
                 print("Already at first page.")
             continue
+        if cl == "h":
+            changed = cd_history_menu()
+            if changed:
+                return
+            continue
         if cl == "s":
             filter_text = input("Filter text (blank to clear): ").strip()
             page = 0
@@ -542,14 +642,15 @@ def choose_directory():
         if cl == "r":
             continue
 
+        matched = False
         for key, name in zip(keys, chunk):
             if ch == key:
-                try:
-                    os.chdir(name)
-                    print(f"Changed directory to: {os.getcwd()}")
-                except OSError as exc:
-                    print(f"Could not change directory: {exc}")
-                return
+                matched = True
+                if change_directory(name):
+                    return
+                break
+        if matched:
+            continue
         print("Invalid directory selection.")
 
 
@@ -831,11 +932,7 @@ def main():
             else:
                 run(["ls", "--color=auto"])
         elif ch == "2":
-            try:
-                os.chdir("..")
-                print(f"Moved to parent: {os.getcwd()}")
-            except OSError as exc:
-                print(f"Could not move to parent: {exc}")
+            change_directory("..", "Moved to parent")
         elif ch == "3":
             choose_directory()
         elif ch == "4":
